@@ -1,12 +1,9 @@
 from typing import Union
 import discord
 from db import Database
-from dto import Conversation, Message
+from dto import Message
 from message_handler import MessageHandler
-
 from sendable import Sendable
-from action import ConversationCompletionAction
-
 DiscordSendableType = Union[discord.Webhook, discord.abc.Messageable]
 
 class DiscordSendable(Sendable):

@@ -12,6 +12,8 @@ from db import Database, UserUnion
 from discord_handler import DiscordHandler, DiscordSendable
 from dto import Conversation, Message
 from sendable import Sendable
+from timezones import timezones
+
 
 openai.api_key = os.environ.get("OpenAIAPI-Token")
 model_engine = "gpt-3.5-turbo"
@@ -71,6 +73,7 @@ for command in commands:
         async def interaction(interaction):
             await interaction.response.defer()
             convo = Conversation.new_conversation()
+            convo.set_system("system", system)
             db.set_conversation(interaction.user, convo)
             db.set_current_conversation(interaction.user, convo)
             sendable = DiscordSendable(interaction.followup)
@@ -79,33 +82,7 @@ for command in commands:
         return interaction
     tree.add_command(discord.app_commands.Command(name=command["command"], description=command["description"], callback=command_maker(command["system"], command["user"])))
 
-time_zones = {
-    "Etc/GMT+12": "International Date Line West (UTC-12)",
-    "Pacific/Midway": "Midway Island (UTC-11)",
-    "Pacific/Honolulu": "Hawaii Standard Time (UTC-10)",
-    "America/Anchorage": "Alaska Standard Time (UTC-9)",
-    "America/Los_Angeles": "Pacific Standard Time (UTC-8)",
-    "America/Denver": "Mountain Standard Time (UTC-7)",
-    "America/Chicago": "Central Standard Time (UTC-6)",
-    "America/New_York": "Eastern Standard Time (UTC-5)",
-    "America/Halifax": "Atlantic Standard Time (UTC-4)",
-    "America/Sao_Paulo": "Brasília Time (UTC-3)",
-    "Atlantic/South_Georgia": "South Georgia Time (UTC-2)",
-    "Etc/UTC": "Coordinated Universal Time (UTC)",
-    "Europe/London": "Greenwich Mean Time (UTC+0)",
-    "Europe/Berlin": "Central European Time (UTC+1)",
-    "Europe/Helsinki": "Eastern European Time (UTC+2)",
-    "Europe/Moscow": "Moscow Standard Time (UTC+3)",
-    "Asia/Dubai": "Gulf Standard Time (UTC+4)",
-    "Asia/Kolkata": "Indian Standard Time (UTC+5:30)",
-    "Asia/Dhaka": "Bangladesh Time (UTC+6)",
-    "Asia/Rangoon": "Myanmar Time (UTC+6:30)",
-    "Asia/Bangkok": "Indochina Time (UTC+7)",
-    "Asia/Shanghai": "China Standard Time (UTC+8)",
-    "Asia/Tokyo": "Japan Standard Time (UTC+9)",
-    "Australia/Brisbane": "Australian Eastern Standard Time (UTC+10)",
-    "Pacific/Auckland": "New Zealand Standard Time (UTC+12)"
-}
+
 
 @tree.command(name="adddatasource", description="Add a data source")
 async def add_datasource_command(interaction, description: str):
@@ -116,10 +93,11 @@ async def add_datasource_command(interaction, description: str):
         return
     await interaction.followup.send(f"Added data source {ds.get('name') or ds.get('url')}")
     set_datasource(interaction.user.id, ds)
+
 @tree.command(name="timezone", description="Sets your timezone for the datetime command")
 async def timezone_command(interaction):
     view = discord.ui.View()
-    view.add_item(discord.ui.Select(placeholder="Select timezone", options=[SelectOption(label=value, value=key) for key, value in time_zones.items()]))
+    view.add_item(discord.ui.Select(placeholder="Select timezone", options=[SelectOption(label=value, value=key) for key, value in timezones.items()]))
     await interaction.response.defer()
     message = await interaction.followup.send("Please choose your timezone:", view=view)
     async def respond_to_select(user, message, id):
@@ -127,9 +105,10 @@ async def timezone_command(interaction):
         if interaction.data is None or interaction.message is None or len(interaction.data.get("values", [])) == 0:
             return
         timezone = interaction.data.get("values", [])[0]
-        await interaction.message.edit(content="Your timezone has been set to: " + time_zones[timezone], view=None)
+        await interaction.message.edit(content="Your timezone has been set to: " + timezones[timezone], view=None)
         set_preference(user.id, "timezone", str(timezone))
     asyncio.create_task(respond_to_select(interaction.user, message, id))
+
 @tree.command(name = "now", description = "Displays current date and time") #Add the guild ids in which the slash command will appear. If it should be in all, remove the argument, but note that it will take some time (up to an hour) to register the command if it's for all guilds.
 async def now_command(interaction):
     now = datetime.datetime.now()
@@ -157,11 +136,8 @@ async def on_ready():
 
 @client.event
 async def on_message(message): 
-    if message.author == client.user:
+    if message.author == client.user or message.author.bot:
         return
-    if message.author.bot:
-        return
-    current_convo = db.get_current_conversation(message.author)
     async def handle_message_async(message):
         return await handler.handle_discord_message(message, db, message.channel)
     asyncio.create_task(handle_message_async(message))

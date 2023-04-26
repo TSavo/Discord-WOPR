@@ -1,0 +1,28 @@
+timezones = {
+    "Etc/GMT+12": "International Date Line West (UTC-12)",
+    "Pacific/Midway": "Midway Island (UTC-11)",
+    "Pacific/Honolulu": "Hawaii Standard Time (UTC-10)",
+    "America/Anchorage": "Alaska Standard Time (UTC-9)",
+    "America/Los_Angeles": "Pacific Standard Time (UTC-8)",
+    "America/Denver": "Mountain Standard Time (UTC-7)",
+    "America/Chicago": "Central Standard Time (UTC-6)",
+    "America/New_York": "Eastern Standard Time (UTC-5)",
+    "America/Halifax": "Atlantic Standard Time (UTC-4)",
+    "America/Sao_Paulo": "Brasília Time (UTC-3)",
+    "Atlantic/South_Georgia": "South Georgia Time (UTC-2)",
+    "Etc/UTC": "Coordinated Universal Time (UTC)",
+    "Europe/London": "Greenwich Mean Time (UTC+0)",
+    "Europe/Berlin": "Central European Time (UTC+1)",
+    "Europe/Helsinki": "Eastern European Time (UTC+2)",
+    "Europe/Moscow": "Moscow Standard Time (UTC+3)",
+    "Asia/Dubai": "Gulf Standard Time (UTC+4)",
+    "Asia/Kolkata": "Indian Standard Time (UTC+5:30)",
+    "Asia/Dhaka": "Bangladesh Time (UTC+6)",
+    "Asia/Rangoon": "Myanmar Time (UTC+6:30)",
+    "Asia/Bangkok": "Indochina Time (UTC+7)",
+    "Asia/Shanghai": "China Standard Time (UTC+8)",
+    "Asia/Tokyo": "Japan Standard Time (UTC+9)",
+    "Australia/Brisbane": "Australian Eastern Standard Time (UTC+10)",
+    "Pacific/Auckland": "New Zealand Standard Time (UTC+12)"
+}
+__all__ = ["timezones"]
