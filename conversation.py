@@ -1,5 +1,5 @@
 from typing import Union, Optional
-from chatgpt import send_to_ChatGPT
+from chatgpt import send_to_ChatGPT, async_send_to_ChatGPT
 from chatgpt import extract_topic, summarize
 import wikipedia
 from typing import Optional, Callable, List, Dict, Any
@@ -149,6 +149,23 @@ class Conversation:
         return self.user != other.user or self.messages != other.messages
     
 
+def conversation_responder(conversation, pipe, done):
+    content = ""
+    async def pipe2(message):
+        nonlocal content
+        nonlocal pipe
+        content += message
+        await pipe(message)
+    async def done2():
+        nonlocal done
+        nonlocal conversation
+        nonlocal content
+        if content == "":
+            return
+        await done()
+        conversation.add_assistant(content)
+        conversation.summary = summarize(str(conversation))
+    return pipe2, done2
 
 class ConversationManager:
     def __init__(self, db):
@@ -156,6 +173,8 @@ class ConversationManager:
         self.db = db
     def update_current_conversation(self, user : int, user_input : str) -> str:
         return self.update_conversation(user, user_input)
+    async def async_update_current_conversation(self, user : int, user_input : str, pipe, done):
+        await self.async_update_conversation(user, user_input, pipe, done)
     def update_conversation(self, user : int, user_input : str, conversation : Optional[Conversation] = None) -> str:
         if conversation is None:
             conversation = self.get_current_conversation(user)
@@ -164,6 +183,12 @@ class ConversationManager:
         conversation.add_assistant(content)
         conversation.summary = summarize(str(conversation))
         return content
+    async def async_update_conversation(self, user : int, user_input : str, pipe, done, conversation : Optional[Conversation] = None):
+        if conversation is None:
+            conversation = self.get_current_conversation(user)
+        conversation.add_user(user_input)
+        pipe2, done2 = conversation_responder(conversation, pipe, done)
+        await async_send_to_ChatGPT(conversation.get_conversation(), pipe2, done2)
     def add_conversation(self, conversation : Conversation) -> Conversation:
         if conversation.get_user() not in self.conversations:
             self.conversations[conversation.get_user()] = []    

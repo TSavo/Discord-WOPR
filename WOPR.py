@@ -8,11 +8,10 @@ import json
 import wikipedia
 import asyncio
 from conversation import WikipediaMode, get_wiki_suggestion, get_wiki_summary, CompoundMode, KnowledgeAwareMode, DateTimeAwareMode, UserPreferenceAwareMode
-from chatgpt import get_is_request_to_change_topics, get_new_or_existing_conversation, summarize_knowledge
+from chatgpt import get_is_request_to_change_topics, get_new_or_existing_conversation, summarize_knowledge, async_summarize_knowledge
 from db import Database
 
-openai.api_key = os.environ.get("OpenAIAPI-Token")
-model_engine = "gpt-3.5-turbo"
+openai.api_key = os.environ.get("OpenAIAPI")
 
 db = Database("db.json")
 
@@ -98,10 +97,39 @@ time_zones = {
 async def summary_command(interaction):
     await interaction.response.send_message(f"Summary: {conversation_manager.get_conversation_summary(interaction.user.id)}")
 
+def channel_responder(channel, chunk_size=60):
+    content = ""
+    send = None
+    sent = 0
+    async def pipe(message):
+        nonlocal content
+        nonlocal send
+        nonlocal sent
+        content += message
+        if send is None and len(content) > sent + chunk_size:
+            sent = len(content)
+            send = await channel.send(content)
+        elif len(content) > sent + chunk_size:
+            sent = len(content)
+            await send.edit(content=content)
+    async def done():
+        nonlocal content
+        if content == "":
+            return
+        nonlocal send
+        nonlocal sent
+        if send is None and len(content) > 0:
+            await channel.send(content)
+        else:
+            if send is not None:
+                await send.edit(content=content)
+    return pipe, done
+
 @tree.command(name="knowledge", description="Get a summary of your knowledge")
 async def knowledge_command(interaction):
     await interaction.response.defer()
-    await interaction.followup.send(f"Knowledge: {summarize_knowledge(conversation_manager.get_conversation_summary(interaction.user.id))}")
+    pipe, done = channel_responder(interaction.followup)
+    await async_summarize_knowledge(conversation_manager.get_conversation_summary(interaction.user.id), pipe, done)
 
 @tree.command(name="remember", description="Sets a preference for the AI to always remember")
 async def always_command(interaction, preference: str, value: str):
@@ -206,6 +234,9 @@ async def on_ready():
     print('Logged in as {0.user}'.format(client))
     await tree.sync()
 
+
+
+
 @client.event
 async def on_message(message): 
     if message.author == client.user:
@@ -239,8 +270,9 @@ async def on_message(message):
                 pass
             else:
                 conversation_manager.switch_to_conversation(message.author.id, conversation)
-    content = conversation_manager.update_current_conversation(message.author.id, message.content)
-    await message.channel.send(content)
+    pipe, done = channel_responder(message.channel)
+    await conversation_manager.async_update_current_conversation(message.author.id, message.content, pipe, done)
+    
       
 token = os.environ.get("Discord-Token", None)
 if token is None:

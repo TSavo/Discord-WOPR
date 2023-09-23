@@ -6,8 +6,8 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 # Create an instance of the SentimentIntensityAnalyzer object
 analyzer = SentimentIntensityAnalyzer()
 
-openai.api_key = os.getenv("OpenAIAPI-Token")
-model_engine = "gpt-3.5-turbo"
+openai.api_key = os.getenv("OpenAIAPI")
+model_engine = "gpt-4"
 def send_to_ChatGPT(messages, model=model_engine):
     response = openai.ChatCompletion.create(
             model=model,
@@ -15,6 +15,20 @@ def send_to_ChatGPT(messages, model=model_engine):
     if response is None:
         raise Exception("No response from OpenAI")
     return response.choices[0]['message']['content'] # type: ignore
+
+
+
+async def async_send_to_ChatGPT(messages, pipe, done, model=model_engine):
+    async for chunk in await openai.ChatCompletion.acreate(
+        model=model,
+        messages=messages,
+        stream=True,
+    ):
+        content = chunk["choices"][0].get("delta", {}).get("content")
+        if content is not None and content != "":
+            await pipe(content)
+        else:
+            await done()
 
 def extract_topic(message : str) -> str:
     convo = [
@@ -64,3 +78,11 @@ def summarize_knowledge(conversation_summary: str) -> str:
         {"role":"user","content":"What is the knowledge base of our prior conversations? Please write a paragraph or three containing the key datapoints from all the conversations. Make sure to include key datapoints from all the conversations."}
     ]
     return send_to_ChatGPT(convo).replace('"', '').replace("'", "").rstrip().lstrip()
+
+async def async_summarize_knowledge(conversation_summary: str, pipe, done) -> str:
+    convo = [
+        {"role":"system","content":"You are a helpful AI assistant who knows how to summarize a series of conversations into a knowledge base. I will supply you with a list of summaries of prior conversations we have had, and I want you to write a paragraph or three containing the key datapoints from all the conversations. Make sure to include key datapoints from all the conversations."},
+        {"role":"system","content":"Here are the summaries of prior conversations:\n" + conversation_summary},
+        {"role":"user","content":"What is the knowledge base of our prior conversations? Please write a paragraph or three containing the key datapoints from all the conversations. Make sure to include key datapoints from all the conversations."}
+    ]
+    await async_send_to_ChatGPT(convo, pipe, done)
