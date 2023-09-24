@@ -1,12 +1,12 @@
 from __future__ import annotations
 import json
-from typing import List, Tuple, Type
+from typing import List, Type
 from sortedcollections import OrderedSet
 import dto
 from intent import IntentType
 
 class IntentClassifier:
-    async def classify_intent(self, message : Message, intents : List[IntentType]) ->  List[Type[IntentType]]:
+    async def classify_intent(self, message : Message, intents : List[IntentType]) -> List[Type[IntentType]]:
         descriptions = {}
         for intent in intents:
             for description in intent.get_descriptions():

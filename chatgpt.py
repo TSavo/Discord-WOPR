@@ -183,7 +183,7 @@ async def async_summarize_knowledge(conversation_summary: str, pipe, done) -> st
     try:
         result = get_body(result)
         result = yaml.load(result, Loader=yaml.Loader)
-        out = {"context":query}
+        out = {"context":convo}
         for k, v in result.items():
             value = v.replace('"', '').replace("'", "").rstrip().lstrip().replace("\\", "")
             if "site:" in value:

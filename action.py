@@ -31,7 +31,7 @@ class ConversationCompletionAction(Action):
         completion = await chatgpt.get_completion(conversation.get_conversation())
         conversation.add_assistant(completion)
         database.set_conversation(message.user, conversation)
-        await sendable.send(completion)
+        await sendable.send(completion) #TODO: Make this use an async response pipe.
 class ConversationSummaryAction(Action):
     def __init__(self):
         super().__init__("Conversation Summary Action", "Set a summary of the current conversation on it.")
@@ -99,7 +99,7 @@ class RememberAction(Action):
         response = await chatgpt.get_completion([{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"I need a response to this that says I will remember these things: \n" + str(message.text) + "\nPlease blockquote the reply as a YAML blockquote starting with ```yaml\n```"}])
         await sendable.send(response.split("```yaml")[1].split("```")[0].strip())
 
-from intent_classifier import Sendable
+from sendable import Sendable
 from db import Database
 from dto import Conversation, Message
 import chatgpt

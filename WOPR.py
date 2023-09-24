@@ -2,23 +2,21 @@ import asyncio
 import datetime
 from typing import Optional
 import discord
-from discord import app_commands, SelectMenu, SelectOption
+from discord import app_commands, SelectOption
 import openai
 import os
 import json
 from action import ConversationCompletionAction
-from chatgpt import extract_datasource, get_is_request_to_change_topics, get_new_or_existing_conversation, merge_conversations, summarize, summarize_knowledge, find_similar_conversations
+from chatgpt import extract_datasource
 from db import Database, UserUnion
 from discord_handler import DiscordHandler, DiscordSendable
 from dto import Conversation, Message
 from sendable import Sendable
+from db import Database
+import asyncio
 from timezones import timezones
 
-import wikipedia
-import asyncio
-from conversation import WikipediaMode, get_wiki_suggestion, get_wiki_summary, CompoundMode, KnowledgeAwareMode, DateTimeAwareMode, UserPreferenceAwareMode
-from chatgpt import get_is_request_to_change_topics, get_new_or_existing_conversation, summarize_knowledge, async_summarize_knowledge
-from db import Database
+
 
 openai.api_key = os.environ.get("OpenAIAPI")
 
@@ -97,37 +95,11 @@ async def add_datasource_command(interaction, description: str):
     await interaction.followup.send(f"Added data source {ds.get('name') or ds.get('url')}")
     set_datasource(interaction.user.id, ds)
 
-time_zones = {
-    "Etc/GMT+12": "International Date Line West (UTC-12)",
-    "Pacific/Midway": "Midway Island (UTC-11)",
-    "Pacific/Honolulu": "Hawaii Standard Time (UTC-10)",
-    "America/Anchorage": "Alaska Standard Time (UTC-9)",
-    "America/Los_Angeles": "Pacific Standard Time (UTC-8)",
-    "America/Denver": "Mountain Standard Time (UTC-7)",
-    "America/Chicago": "Central Standard Time (UTC-6)",
-    "America/New_York": "Eastern Standard Time (UTC-5)",
-    "America/Halifax": "Atlantic Standard Time (UTC-4)",
-    "America/Sao_Paulo": "Brasília Time (UTC-3)",
-    "Atlantic/South_Georgia": "South Georgia Time (UTC-2)",
-    "Etc/UTC": "Coordinated Universal Time (UTC)",
-    "Europe/London": "Greenwich Mean Time (UTC+0)",
-    "Europe/Berlin": "Central European Time (UTC+1)",
-    "Europe/Helsinki": "Eastern European Time (UTC+2)",
-    "Europe/Moscow": "Moscow Standard Time (UTC+3)",
-    "Asia/Dubai": "Gulf Standard Time (UTC+4)",
-    "Asia/Kolkata": "Indian Standard Time (UTC+5:30)",
-    "Asia/Dhaka": "Bangladesh Time (UTC+6)",
-    "Asia/Rangoon": "Myanmar Time (UTC+6:30)",
-    "Asia/Bangkok": "Indochina Time (UTC+7)",
-    "Asia/Shanghai": "China Standard Time (UTC+8)",
-    "Asia/Tokyo": "Japan Standard Time (UTC+9)",
-    "Australia/Brisbane": "Australian Eastern Standard Time (UTC+10)",
-    "Pacific/Auckland": "New Zealand Standard Time (UTC+12)"
-}
+
 
 @tree.command(name="summary", description="Get a summary of your conversations")
 async def summary_command(interaction):
-    await interaction.response.send_message(f"Summary: {conversation_manager.get_conversation_summary(interaction.user.id)}")
+    await interaction.response.send_message(f"Summary: FIX ME") #conversation_manager.get_conversation_summary(interaction.user.id)}")
 
 def channel_responder(channel, chunk_size=60):
     content = ""
@@ -160,8 +132,9 @@ def channel_responder(channel, chunk_size=60):
 @tree.command(name="knowledge", description="Get a summary of your knowledge")
 async def knowledge_command(interaction):
     await interaction.response.defer()
-    pipe, done = channel_responder(interaction.followup)
-    await async_summarize_knowledge(conversation_manager.get_conversation_summary(interaction.user.id), pipe, done)
+    await interaction.response.send("Fix this shit.")
+    #pipe, done = channel_responder(interaction.followup)
+    #await async_summarize_knowledge(conversation_manager.get_conversation_summary(interaction.user.id), pipe, done)
 
 @tree.command(name="remember", description="Sets a preference for the AI to always remember")
 async def always_command(interaction, preference: str, value: str):

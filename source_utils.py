@@ -30,7 +30,7 @@ def get_type_from_typehint(typehint : str) -> Type:
         eval("import " + typehint.split("[")[-1].split("]")[0])
         return unwrap_type(eval(typehint))
     
-def get_dependent_classes(t: Type, seen: Set[Type] = set()) -> Set[Type]:
+def get_dependent_classes(t: Type, seen: Set[Type] = None) -> Set[Type]:
     """
     Recursively walk the fields of a type and return a set of all dependent classes.
     """
