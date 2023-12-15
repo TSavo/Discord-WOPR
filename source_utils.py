@@ -65,34 +65,36 @@ def get_source(my_cls : Type) -> str:
         source += str(inspect.getsource(x))
     return source
     
-from typing import Any, List, Type, TypeVar, get_type_hints
 import yaml
+import dataclasses
+from typing import Any, TypeVar, Type, get_type_hints
 
 T = TypeVar('T')
 
-def is_optional_type_hint(tp):
-    return getattr(tp, "__origin__", None) is Optional
 def from_yaml(yaml_str: str, cls: Type[T]) -> T:
-    type_hints = get_type_hints(cls)
-        
-    def _from_yaml(data: Any, cls: Type[T]) -> T:
-        if isinstance(data, list):
-            return [_from_yaml(x, cls) for x in data] # type: ignore
-        elif isinstance(data, dict):
+    def convert_to_class(data: Any, cls: Type[T]) -> T:
+        if dataclasses.is_dataclass(cls):
+            type_hints = get_type_hints(cls)
             kwargs = {}
-            for key, value in data.items():
-                if isinstance(value, list):
-                    result = []
-                    for item in value:
-                        result.append(_from_yaml(item, type_hints[key].__args__[0]))
-                    kwargs[key] = result
-                elif isinstance(value, dict):
-                    kwargs[key] = _from_yaml(value, type_hints[key].__args__[1])
-                else:
-                    kwargs[key] = value
+            for field_name, field_type in type_hints.items():
+                if field_name in data:
+                    field_value = data[field_name]
+                    if dataclasses.is_dataclass(field_type) or isinstance(field_type, type):
+                        kwargs[field_name] = convert_to_class(field_value, field_type)
+                    elif getattr(field_type, "__origin__", None) is dict:
+                        kwargs[field_name] = {k: convert_to_class(v, field_type.__args__[1]) for k, v in field_value.items()}
+                    elif getattr(field_type, "__origin__", None) is list:
+                        kwargs[field_name] = [convert_to_class(item, field_type.__args__[0]) for item in field_value]
+                    else:
+                        kwargs[field_name] = field_value
             return cls(**kwargs)
+        elif isinstance(data, list):
+            return [convert_to_class(item, cls.__args__[0]) for item in data]
         else:
             return data
-    data = yaml.safe_load(yaml_str)
-    return _from_yaml(data, cls)
+
+    parsed_data = yaml.safe_load(yaml_str)
+    if isinstance(parsed_data, list):
+        return [convert_to_class(item, cls) for item in parsed_data]
+    return convert_to_class(parsed_data, cls)
 

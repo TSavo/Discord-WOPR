@@ -40,6 +40,7 @@ class Database:
         self.current_conversation = self.db.table("current_conversation")
         self.knowledge = self.db.table("knowledge")
         self.datasources = self.db.table("datasources")
+        self.tools = self.db.table("tools")
 
     def get_preferences(self, user : UserUnion) -> dict[str, str]:
         if not self.preferences.contains(get_user_query(user)):

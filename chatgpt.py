@@ -8,17 +8,23 @@ from retry import retry
 import yaml
 from typing import TypeVar
 import source_utils
+from sendable import Sendable
+from dto import Function, FunctionParameter, FunctionParameters, MessageClassification, Tool, ToolDefinition
 T = TypeVar("T", bound=object)
+
 
 
 # Create an instance of the SentimentIntensityAnalyzer object
 analyzer = SentimentIntensityAnalyzer()
 
 openai.api_key = os.getenv("OpenAIAPI")
-model_engine = "gpt-4"
+exact_engine = "gpt-4"
+fast_engine="gpt-3.5-turbo"
 
 @retry(tries=3, delay=3, backoff=2, logger=None)
-async def get_completion(messages :list[dict[str,str]], model:str=model_engine, temperature:float=0.5) -> str:
+async def get_completion(messages :list[dict[str,str]], model:str=exact_engine, temperature:float=0.5, exact=False) -> str:
+    if exact:
+        model=exact_engine
     response = openai.ChatCompletion.create(
             model=model,
             messages=messages,
@@ -27,9 +33,12 @@ async def get_completion(messages :list[dict[str,str]], model:str=model_engine, 
         raise Exception("No response from OpenAI")
     return response.choices[0]['message']['content'] # type: ignore
 
-
-
-async def async_send_to_ChatGPT(messages, pipe, done, model=model_engine):
+async def pipe_completion(messages : list[dict[str,str]], sendable: Sendable, model:str=exact_engine, tempeature:float=0.5, exact=True) -> str:
+    if not exact:
+        model=fast_engine
+    pipe, done = sendable.get_pipe()
+    completion = ""
+    
     async for chunk in await openai.ChatCompletion.acreate(
         model=model,
         messages=messages,
@@ -38,14 +47,19 @@ async def async_send_to_ChatGPT(messages, pipe, done, model=model_engine):
         content = chunk["choices"][0].get("delta", {}).get("content")
         if content is not None and content != "":
             await pipe(content)
+            completion += content
         else:
             await done()
+    return completion
 
 def get_body(message : str) -> str:
     try:
         message = message.split('```')[1]
         if message.lower().startswith('yaml'):
             message = message[4:]
+            message = message.strip()
+            if message.startswith(">") and not message.startswith(">\n"):
+                message = ">\n  " + message[1:]
         return message.strip()
     except:
         return message.strip()
@@ -60,14 +74,14 @@ async def extract_topic(message : str) -> str:
 async def summarize(conversation: str) -> str:
     convo = [
         {"role":"system","content":"You are a helpful AI assistant who knows how to extract information from a conversational text for integration into a knowledge base, and return only the summarized content as a list without making reference to the request. Please summarize the entirety of the following text as a list of key factual and conversational datapoints from the conversation. Please supply as many important details in the summary as you can, including descriptions or summaries of all provided examples, and return only the bulleted list of datapoints. Include nothing but the list in your reply. Don't use words like \"summary\" or \"prior conversations\" in your reply unless they are part of the data in the list itself. Please remember to summarize ALL of the text, even if there are large spaces between words or paragraphs."},
-        {"role":"user","content":"What is a highly detailed summary of this content? \"" + conversation[:3000] + "\" Please only supply the summary in quotes. Make sure to include the quotes and nothing else except the summary in quotes."}
+        {"role":"user","content":"What is a highly detailed summary of this content? \"" + conversation[:3800] + "\" Please only supply the summary in quotes. Make sure to include the quotes and nothing else except the summary in quotes."}
     ]
     return (await get_completion(convo)).replace('"', '').replace("'", "").rstrip().lstrip()
 
 async def summarize_data(data: str) -> str:
     convo = [
         {"role":"system","content":"You are a helpful AI assistant who knows how to create detailed summaries of content. I will supply you with some content, and I want you to tell me, in quotes, a summary of the conversation. Please supply as many important details in the summary as you can."},
-        {"role":"user","content":"What is a highly detailed summary of this content? \"" + data[:3000] + "\" Please only supply the summary in quotes. Make sure to include the quotes and nothing else except the summary in quotes."}
+        {"role":"user","content":"What is a highly detailed summary of this content? \"" + data[:3800] + "\" Please only supply the summary in quotes. Make sure to include the quotes and nothing else except the summary in quotes."}
     ]
     return (await get_completion(convo)).replace('"', '').replace("'", "").rstrip().lstrip()
 
@@ -278,14 +292,78 @@ async def get_structured_classification(message: str, cls: Type[T], constraints:
                    + "\n```\n")
                   for k, v in constraints.items())
     convo = [{"role": "system", "content": "You are a helpful AI assistant who knows how to extract structured data from a message or messages, and return the results as a blockquoted yaml array of " + cls.__name__ + " object shaped dictionaries, one for each part of what is said."}]
-    convo += [{"role": "system", "content": "The message may contain multiple requests, in which case you should return an object for each portion of the message."}]
+    convo += [{"role": "system", "content": "The message may contain multiple requests, in which case you should return an object for each portion of the message. For example, if the request was to grab a web page, and summarize it, that would be a Scrape the Web object, followed by a Summarize object. You would return an object for each intent, with the appropriate data for each."}]
+    convo += [{"role":"system", "content": "It's very important that you break up complex requests into smaller requests, and return an object for each request. It is necessary to use step by step logic to describe the steps involved and break up the steps into smaller, matchable contraints. For example, if the request is 'Are there more Jews that speak Hewbew than Arabic?', and one of the options is to search the web, or to summarize, you would generate an object to search the web for the number of Jews who are Arabic speakers, and another object to search the web for the number of Jews who are Hebrew speakers, and another object to summarize the data. You would return an object for each of the three requests. However if there's a computational engine available, you might just return a single object to query the computational engine for the answer, and not return any objects for the other two requests. You should always return an object for each request, and you should always break up complex requests into smaller requests where appropriate, matching the best intention of the request to the best available set of constraints to satify the request in the most accurate and optimal way possible."}]
     convo += [{"role":"system","content": f"Here are the Python classes that the YAML object must deserialize to:\n```python\n{source_utils.get_source(cls)}\n```"}]
-    if constraints:
-        convo += [{"role":"system","content": f"Here are the required values for the parameters:\n{con}\n"}]
-    convo += [{"role": "user", "content": f'Please convert the following into a blockquoted YAML array of dictionaries that follows the above constraints: "{message}"\n'}]
+    if len(con) > 0:
+        convo += [{"role": "system", "content": con}]
+    convo += [{"role": "system", "content": "VERY IMPORTANT: Make sure to add a line break after a > in the YAML. Also be sure you escape any inner quotes in strings. Don't forget!!!"}]
+    convo += [{"role": "user", "content": f'VERY IMPORTANT: Make sure to add a line break after a > in the YAML. Also be sure you escape any inner quotes in strings. Don\'t forget!!! Please convert the following into a blockquoted YAML dictionary or array of dictionaries that follows the above constraints: "{message}"\n'}]
     result = (await get_completion(convo))
     result = get_body(result)
     result = source_utils.from_yaml(result, cls)
     if not isinstance(result, list):
         result = [result]
+    return result
+
+async def get_tool_spec(description: str) -> ToolDefinition:
+    convo = [{"role": "system", "content": "You are a helpful AI assistant who knows how to take desciptions of tools and convert them into a YAML map of tool specifications."}]
+    functionParameterSource = '\n'.join(["   " + line for line in source_utils.get_source(FunctionParameter).split("\n")])
+    functionParametersSource = '\n'.join(["   " + line for line in source_utils.get_source(FunctionParameters).split("\n")])
+    functionSource = '\n'.join(["   " + line for line in source_utils.get_source(Function).split("\n")])
+    toolSource = '\n'.join(["   " + line for line in source_utils.get_source(Tool).split("\n")])
+    toolDefinitionSource = '\n'.join(["   " + line for line in source_utils.get_source(ToolDefinition).split("\n")])
+
+    convo += [{"role": "user", "content": '''I am developing a bot in Python that integrates with the ChatGPT API. This bot uses a set of Python classes to represent tools that can be invoked via the chat completion api. The classes are as follows:
+
+1. **`FunctionParameter`**: Defines a parameter for a function, including `type` (data type of the parameter) and `description` (what the parameter is for).
+   ```python
+''' + functionParameterSource + '''
+   ```
+
+2. **`FunctionParameters`**: Details the parameters a function takes, including `type` (data type, e.g., 'Dict'), `properties` (dictionary mapping names to `FunctionParameter` instances), and `required` (list of required parameter names).
+   ```python
+''' + functionParametersSource + '''
+   ```
+
+3. **`Function`**: Describes a function that the tool can call, including `name`, `description`, and `parameters` (an instance of `FunctionParameters`).
+   ```python
+''' + functionSource + '''
+   ```
+
+4. **`Tool`**: Represents a tool that can be invoked, containing `type` and `function` (an instance of `Function`).
+   ```python
+''' + toolSource + '''
+   ```
+
+I am now looking to create a specific tool. The description of the tool is as follows:
+```
+''' + description + '''
+```
+
+**Important Notes:**
+- The parameters defined in the `Tool` class unioned with the static_parameters must have a direct and invariant relationship with the parameters used in the Python code for the tool's implementation.
+- All output from the Python code be print()-ed. If additional files are generated, they should also be placed in the `/` directory, and their file names should be print()-ed. This is particularly important for the tool's execution within a Dockerized environment, ensuring that output data can be easily retrieved and managed. The function must return None after writing out all output files.
+- If the relationship between the `Tool` parameters, the Python implementation parameters, the static_parameters, and the output handling is not immediately obvious, please ask for additional details to ensure accuracy.
+
+Based on this description, please provide the following:
+1. A `Tool` class instance representing this tool.
+2. Python code for the tool implementation with a function defined ensuring that the parameters in the `Tool` class PLUS the static values are directly and invariantly represented in the Python function, and that all output either print()-ed or written to disk and the file names are print()-ed, with any additional files placed in `/`. The python should just define the function, not invoke it. This MUST be a string, the python variable of the ToolDescription class.
+3. A description of the tool and how to use it, including any relevant schemas for the input and output data.
+4. Any static parameters for the invocation such as api keys or other static parameters that are NOT part of the function signature. They MUST be part of the python function parameters, but MUST NOT be in the Tool definition.
+5. A unique and descriptive name and a highly descriptive type for the Tool (type on Tool), knowing that the names and types in the system need to be unique and highly descriptive of what they do. The name and the type should be the same and should be highly descriptive (good: "Specific Program Search Tool With API Key", bad: "QueryTool").
+6. A unit test, or example invocation, with all the parameters supplied hard coded, and an assertion that the output is correct. This is to ensure that the tool works as expected. The unit test should be a string, the unit_test variable of the ToolDescription class.
+
+static_parameters MUST be in the Python function parameters but MUST NOT be in the Tool FunctionParameters. static_parameters MUST NOT be default parameters in the python. They are used to hold secrets like api keys and MUST be part of the python function signature and MUST be excluded from the Tool FunctionParameters.
+
+Use the following @dataclass to represent your output, and blockquote it in YAML as a single serialized ToolDescription object:
+```python
+''' + toolDefinitionSource + '''
+```
+
+Do NOT discuss the solution. JUST output YAML for a ToolDescription object I can deserialize. You don't need to redefine the classes provided either. Do NOT include the Tool classes in the python. Just give me a serialized ToolDescription with the Tool, and the python for the tool implementation. Again, DO NOT repeat the tool and function and associated dataclasses in the output. Make sure the python is a string in the python variale of the ToolDescription class. Do NOT include class definitions or type hints in the YAML.
+'''}]
+    result = await get_completion(convo)
+    result = get_body(result)
+    result = source_utils.from_yaml(result, ToolDefinition)
     return result

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from abc import abstractmethod
+from typing import Any, Dict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import AsyncGenerator, List, Optional, Union
@@ -99,24 +100,28 @@ class Conversation:
     def new_conversation(system:str = "You are a helpful AI assistant.") -> Conversation:
         return Conversation({"system":system},[], "The start of a brand new conversation")
     def set_system(self, system : str, message : str = "") -> None:
-        self.system = {"name":system,"message":message}
+        self.system[system] = message
     def delete_system(self, system : str) -> None:
         del self.system[system]
     def get_conversation(self) -> List[dict[str, str]]:
-        messages = [{"role":"system","content":value} for value in self.system.values()]
+        messages : List[dict[str,str]] = [{"role":"assistant","content":value} for value in self.system.values()]
         messages.extend(self.messages)
-        return messages
+        copy : List[dict[str,str]] = []
+        for x in range(0, len(messages)):
+            if messages[x]["content"] is not None and messages[x]["content"] != "":
+                copy.append(messages[x])
+        return copy
     def add_user(self, user : str) -> None:
-        self.messages.append({"role":"user","content":user})
-    def add_system(self, system : str) -> None:
-        self.messages.append({"role":"system","content":system})
+        if user is not None:
+            self.messages.append({"role":"user","content":user})
     def add_assistant(self, assistant : str) -> None:
-        self.messages.append({"role":"assistant","content":assistant})
+        if assistant is not None:
+            self.messages.append({"role":"assistant","content":assistant})
     def delete_last_message(self) -> None:
         self.messages.pop()
     def __str__(self) -> str:
         convo = ""
-        for message in self.messages:
+        for message in self.get_conversation():
             convo += message["role"] + ": " + message["content"] + "\n"
         return convo
 
@@ -202,5 +207,42 @@ class Justification:
     intent:Optional[str] = None
     action:Optional[str] = None
     description:Optional[str] = None
+    
+@dataclass
+class FunctionParameterValue:
+    type:str
+    value:Any
+@dataclass
+class FunctionParameter:
+    type: str
+    description: str
+
+@dataclass
+class FunctionParameters:
+    type: str
+    properties: Dict[str, FunctionParameter]
+    required: List[str]
+
+@dataclass
+class Function:
+    name: str
+    description: str
+    parameters: FunctionParameters
+
+@dataclass
+class Tool:
+    type: str
+    function: Function
+
+@dataclass
+class ToolDefinition:
+    name: str = ""
+    description: str = "" #Description of the tool
+    static_parameters: dict[str, FunctionParameterValue] = dataclasses.field(default_factory=dict[str, FunctionParameterValue]) #Static parameters for the tool
+    tool: Tool = dataclasses.field(default_factory=Tool) #The tool itself
+    pip_packages: List[str] = dataclasses.field(default_factory=list[str]) #The pip packages required for the tool
+    python: str = "" #The python code for the tool
+    example_invocation: str = "" #An example invocation of the tool that has all the parameters supplied and asserts the results are correct. This will be appended to the code and run to verify the tool works. Do not create any unnecessary objects, just invoke the function with the parameters then assert result.txt has the correct value.
+    
 
 

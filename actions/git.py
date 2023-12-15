@@ -23,7 +23,7 @@ class GitCloneAction(Action):
             conversation = database.get_current_conversation(message.user)
             if conversation is None:
                 raise ValueError("No conversation found.")
-            conversation.add_system("A git repository called " + self.repo["repo"] + " has been cloned from " + self.repo["url"] + " with the options: " + self.repo["options"])
+            conversation.add_assistant("A git repository called " + self.repo["repo"] + " has been cloned from " + self.repo["url"] + " with the options: " + self.repo["options"])
             database.set_conversation(message.user, conversation)
 
 def invoke_at(path: str):

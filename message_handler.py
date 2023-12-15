@@ -31,7 +31,7 @@ class MessageHandler:
         intents = await self.intent_classifier.classify_intent(message, Intent.__subclasses__())
         while(len(intents) > 0): #No for loop here, because we might change state in the middle of the loop
             intent = intents.pop(0)
-            actions = await intent.get_actions(message, database, sendable)
+            actions = intent.get_actions()
             while(len(actions) > 0): #No for loop here, because we might change state in the middle of the loop
                 action = actions.pop(0)
                 try:

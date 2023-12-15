@@ -196,9 +196,6 @@ async def on_ready():
     print('Logged in as {0.user}'.format(client))
     await tree.sync()
 
-
-
-
 @client.event
 async def on_message(message): 
     if message.author == client.user or message.author.bot:
