@@ -3,7 +3,7 @@ import docker
 import tempfile
 import os
 
-def run_python_script(python_code, dependencies=[]):
+async def run_python_script(python_code, dependencies=[]):
     # Create a temporary directory to hold the Python script
     with tempfile.TemporaryDirectory() as temp_dir:
         script_path = os.path.join(temp_dir, "script.py")
@@ -43,10 +43,16 @@ def run_python_script(python_code, dependencies=[]):
     
 if __name__ == "__main__":
     python_code = """
-import os
-import numpy as np
-np.random.seed(42)
-print(np.random.randint(0, 100, 10))
+import wolframalpha
+
+def wolfram_alpha_query(query: str, api_key: str) -> None:
+    client = wolframalpha.Client(api_key)
+    res = client.query(query)
+    output = next(res.results).text
+    print(output)
+    return return output
+
+assert("42" in wolfram_alpha_query('What is the meaning of life?', '3P3L95-Q3UKREU8R3'))
     """
-    print(run_python_script(python_code, ["numpy"]), end="")
+    print(run_python_script(python_code, ["wolframalpha"]), end="")
     

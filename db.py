@@ -7,7 +7,7 @@ import jsonpickle
 from tinydb_serialization import Serializer
 from tinydb_serialization import SerializationMiddleware
 from tinydb.storages import JSONStorage
-from dto import Conversation
+from dto import Conversation, Knowledge, Tool
 from dto import User, UserConversation
 from external_datasource import DataSource
 
@@ -35,62 +35,38 @@ class Database:
         middleware = SerializationMiddleware(JSONStorage)
         middleware.register_serializer(JSONSerializer(), "jsonpickle")
         self.db = TinyDB(db_path, indent=4, separators=(',', ': '), ensure_ascii=False, storage=middleware) 
-        self.preferences = self.db.table("preferences")
+        self.knowledge = self.db.table("knowledge")
         self.conversations = self.db.table("conversations")
         self.current_conversation = self.db.table("current_conversation")
         self.knowledge = self.db.table("knowledge")
         self.datasources = self.db.table("datasources")
         self.tools = self.db.table("tools")
 
-    def get_preferences(self, user : UserUnion) -> dict[str, str]:
-        if not self.preferences.contains(get_user_query(user)):
+    def get_knowledge_base(self, user : UserUnion) -> dict[str, Knowledge]:
+        if not self.knowledge.contains(get_user_query(user)):
             return {}
         else:
-            return self.preferences.search(get_user_query(user))[0].get("preferences", {})
+            return self.knowledge.search(get_user_query(user))[0].get("knowledge", {})
         
-    def get_preference(self, user_id, preference_name, default=None) -> Optional[str]:
-        return self.get_preferences(user_id).get(preference_name, default)
+    def get_knowledge(self, user: UserUnion, knowledge_key, default=None) -> Optional[Knowledge]:
+        return self.get_knowledge(user.id).get(knowledge_key, default)
     
-    def set_preference(self, user : UserUnion, preference_name, preference_value):
-        if not self.preferences.contains(get_user_query(user)):
-            self.preferences.insert({"user_id": str(user.id), "preferences": {preference_name: preference_value}})
+    def set_knowledge(self, user : UserUnion, knowledge_key: str, knowledge_value: Knowledge):
+        if not self.knowledge.contains(get_user_query(user)):
+            self.knowledge.insert({"user_id": str(user.id), "knowledge": {knowledge_key: knowledge_value}})
         else:
-            preferences = self.preferences.search(get_user_query(user))[0].get("preferences", {})
-            preferences[preference_name] = preference_value
-            self.preferences.update({"preferences": preferences}, get_user_query(user))
+            knowledge = self.knowledge.search(get_user_query(user))[0].get("knowledge", {})
+            knowledge[knowledge_key] = knowledge_value
+            self.knowledge.upsert({"knowledge": knowledge}, get_user_query(user))
 
-    def delete_preference(self, user : UserUnion, preference_name):
-        if not self.preferences.contains(get_user_query(user)):
+    def delete_knowledge(self, user : UserUnion, knowledge_key: str):
+        if not self.knowledge.contains(get_user_query(user)):
             return
         else:
-            preferences = self.preferences.search(get_user_query(user))[0].get("preferences", {})
-            del preferences[preference_name]
-            self.preferences.update({"preferences": preferences}, get_user_query(user))
+            knowledge = self.knowledge.search(get_user_query(user))[0].get("knowledge", {})
+            del knowledge[knowledge_key]
+            self.knowledge.upsert({"knowledge": knowledge}, get_user_query(user))
 
-    def get_datasources(self, user : UserUnion) -> dict[str, DataSource]:
-        if not self.datasources.contains(get_user_query(user)):
-            return {}
-        else:
-            return self.datasources.search(get_user_query(user))[0].get("datasources", {})
-        
-    def get_datasource(self, user : UserUnion, datasource_name) -> Optional[DataSource]:
-        return self.get_datasources(user).get(datasource_name, None)
-    
-    def set_datasource(self, user : UserUnion, datasource : DataSource):
-        if not self.datasources.contains(get_user_query(user)):
-            self.datasources.insert({"user_id": str(user.id), "datasources": {}})
-        datasources = self.datasources.search(get_user_query(user))[0].get("datasources", {})
-        datasources[datasource.name] = datasource
-        self.datasources.update({"datasources": datasources}, get_user_query(user))
-
-    def delete_datasource(self, user : UserUnion, datasource_name):
-
-        if not self.datasources.contains(get_user_query(user)):
-            return
-        else:
-            datasources = self.datasources.search(get_user_query(user))[0].get("datasources", {})
-            del datasources[datasource_name]
-            self.datasources.update({"datasources": datasources}, get_user_query(user))
 
     def get_conversations(self, user : UserUnion) -> List[Conversation]:
         result = self.conversations.search(get_user_query(user))
@@ -117,12 +93,22 @@ class Database:
         if conversation_id is None:
             return None
         return self.get_conversation(user, conversation_id)
-    
-    def get_knowledge(self, user : UserUnion) -> str:
-        if not self.knowledge.contains(get_user_query(user)):
-            return ""
-        else:
-            return self.knowledge.search(get_user_query(user))[0].get("knowledge", {})
         
-    def set_knowledge(self, user : UserUnion, knowledge : str):
-        self.knowledge.upsert({"user_id":str(user.id), "knowledge": knowledge}, get_user_query(user))
+    def add_tool(self, user : UserUnion, tool : Tool):
+        if not self.tools.contains(get_user_query(user)):
+            self.tools.insert({"user_id":str(user.id), "tools": []})
+        tools = self.tools.search(get_user_query(user))[0].get("tools", [])
+        tools.append(tool)
+        self.tools.update({"tools": tools}, get_user_query(user))
+    
+    def remove_tool(self, user : UserUnion, tool : str):
+        if not self.tools.contains(get_user_query(user)):
+            return
+        tools = self.tools.search(get_user_query(user))[0].get("tools", [])
+        tools.remove(tool)
+        self.tools.update({"tools": tools}, get_user_query(user))
+    
+    def get_tools(self, user : UserUnion) -> List[str]:
+        if not self.tools.contains(get_user_query(user)):
+            return []
+        return self.tools.search(get_user_query(user))[0].get("tools", [])

@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from typing import List, TypeVar, Union
-from action import Action, ChangeCurrentConversationAction, ConversationCompletionAction, ConversationSummaryAction, CreateToolAction, RememberAction, UpdateKnowledgeAction
+from action import Action, ChangeCurrentConversationAction, ConversationCompletionAction, ConversationSummaryAction, CreateToolAction
 from db import Database
 from dto import Message
 from sendable import Sendable
@@ -26,7 +26,7 @@ IntentType = Union[TypeVar("Intent", bound=Intent), TypeVar("SubIntent", bound=S
 
 class TopicChangeIntent(Intent):
     def __init__(self):
-        super().__init__(["An explicit request to change the topic.", "An implict request to discuss something unrelated to what we have been discussing."], [ChangeCurrentConversationAction(), UpdateKnowledgeAction(), ConversationCompletionAction(), ConversationSummaryAction()])
+        super().__init__(["An explicit request to change the topic.", "An implict request to discuss something unrelated to what we have been discussing."], [ChangeCurrentConversationAction(), ConversationCompletionAction(), ConversationSummaryAction()])
 
 class NoOpIntent(Intent):
     def __init__(self):
@@ -42,8 +42,12 @@ class InquiryIntent(Intent):
 
 class RememberIntent(Intent):
     def __init__(self):
-        super().__init__(["An explicit request to remember a detail or a set of details.","An explicit request to keep something in mind or to note something for the future."], [RememberAction()])
-        
+        super().__init__(["An explicit request to remember a detail or a set of details.","An explicit request to keep something in mind or to note something for the future."], NoOpIntent().get_actions())
+
+class ForgetIntent(Intent):
+    def __init__(self):
+        super().__init__(["An explicit request to forget a detail or a set of details.","An explicit request to forget something."], NoOpIntent().get_actions())
+
 class CreateToolIntent(Intent):
     def __init__(self):
         super().__init__(["An explicit request to create a tool."], [CreateToolAction()])

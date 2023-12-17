@@ -108,8 +108,7 @@ class Conversation:
         messages.extend(self.messages)
         copy : List[dict[str,str]] = []
         for x in range(0, len(messages)):
-            if messages[x]["content"] is not None and messages[x]["content"] != "":
-                copy.append(messages[x])
+            copy.append(messages[x])
         return copy
     def add_user(self, user : str) -> None:
         if user is not None:
@@ -119,10 +118,14 @@ class Conversation:
             self.messages.append({"role":"assistant","content":assistant})
     def delete_last_message(self) -> None:
         self.messages.pop()
+    def add_tool_call(self, tool_call) -> None:
+        self.messages.append({"role":"tool_call", "content":tool_call})
+    def add_tool_call_result(self, tool_call_result : dict[str,str]) -> None:
+        self.messages.append({"role":tool_call_result["role"], "name":tool_call_result["name"], "content":tool_call_result["content"]})
     def __str__(self) -> str:
         convo = ""
         for message in self.get_conversation():
-            convo += message["role"] + ": " + message["content"] + "\n"
+            convo += message["role"] + " " + message.get("name", "") + ": " + message["content"] + "\n"
         return convo
 
 @dataclass
@@ -188,17 +191,24 @@ class Endpoint:
     method: str
     roles: List[str]
 
+
+@dataclass
+class Tool:
+    type: str
+    function: Function
+
 import dataclasses
 @dataclass
 class MessageClassification:
-  original_message:str
-  message_part:str
-  intent:Optional[str] = None
-  categories:List[str] = dataclasses.field(default_factory=list)
-  parameters:List[str] = dataclasses.field(default_factory=list)
-  reply:Optional[str] = None
-  justifications_for_reply:List[Justification] = dataclasses.field(default_factory=list)
-  follow_up_items:List[MessageClassification] = dataclasses.field(default_factory=list)
+  original_message:str #The original message from the user
+  message_part:str #The part of the message that is classified
+  intent:Optional[str] = None #The intent of the message part
+  categories:List[str] = dataclasses.field(default_factory=list) #The categories of the message part
+  reply:Optional[str] = None #The reply to the message part
+  justifications_for_reply:List[Justification] = dataclasses.field(default_factory=list) #The justifications for the reply
+  follow_up_items:List[MessageClassification] = dataclasses.field(default_factory=list) #The follow up items for the message part
+  function:Optional[str] = None #The function to call for the message part
+  function_parameters:Optional[dict[str,str]] = None #The parameters to call the function with
 
 @dataclass
 class Justification:
@@ -230,11 +240,6 @@ class Function:
     parameters: FunctionParameters
 
 @dataclass
-class Tool:
-    type: str
-    function: Function
-
-@dataclass
 class ToolDefinition:
     name: str = ""
     description: str = "" #Description of the tool
@@ -244,5 +249,20 @@ class ToolDefinition:
     python: str = "" #The python code for the tool
     example_invocation: str = "" #An example invocation of the tool that has all the parameters supplied and asserts the results are correct. This will be appended to the code and run to verify the tool works. Do not create any unnecessary objects, just invoke the function with the parameters then assert result.txt has the correct value.
     
+    def getCode(self, args) -> str:
+        code = self.python
+        code += "\n"
+        static_args = {static_parameter: self.static_parameters[static_parameter].value for static_parameter in self.static_parameters}
+        code += "args = " + str(static_args) + "\n"    
+        code += "args.update(" + str(args) + ")\n"
+        code += self.tool.function.name + "(**args)\n"
+        return code
+    
+    def getExampleInvocation(self) -> str:
+        return self.python + "\n" + self.example_invocation + "\n"
+    
 
-
+@dataclass
+class Knowledge:
+    value:str
+    description:str

@@ -93,7 +93,10 @@ def from_yaml(yaml_str: str, cls: Type[T]) -> T:
         else:
             return data
 
-    parsed_data = yaml.safe_load(yaml_str)
+    try:
+        parsed_data = yaml.safe_load(yaml_str)
+    except:
+        parsed_data = yaml.safe_load(yaml_str.replace("\"", "'"))
     if isinstance(parsed_data, list):
         return [convert_to_class(item, cls) for item in parsed_data]
     return convert_to_class(parsed_data, cls)

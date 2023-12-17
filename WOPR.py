@@ -15,10 +15,9 @@ from sendable import Sendable
 from db import Database
 import asyncio
 from timezones import timezones
+import logging
 
-
-
-openai.api_key = os.environ.get("OpenAIAPI")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 db = Database("db.json")
 
@@ -29,30 +28,6 @@ tree = app_commands.CommandTree(client)
 commands = json.load(open("commands.json", "r"))
 
 handler = DiscordHandler()
-
-def get_preference(user, preference, default="") -> Optional[str]:
-    return db.get_preference(user, preference, default)
-
-def get_preferences(user: UserUnion) -> dict:
-    return db.get_preferences(user)
-
-def set_preference(user : UserUnion, preference, value) -> None:
-    db.set_preference(user, preference, value)
-
-def remove_preference(user, preference):
-    db.delete_preference(user, preference)
-
-def set_datasource(user, datasource):
-    db.set_datasource(user, datasource)
-
-def get_datasource(user, name):
-    return db.get_datasource(user, name)
-
-def get_datasources(user):
-    return db.get_datasources(user)
-
-def delete_datasource(user, name):
-    db.delete_datasource(user, name)
 
 def split_into_chunks(text, chunk_size=2000):
     chunks = []
@@ -83,18 +58,6 @@ for command in commands:
             await complete(message, db, sendable)
         return interaction
     tree.add_command(discord.app_commands.Command(name=command["command"], description=command["description"], callback=command_maker(command["system"], command["user"])))
-
-
-
-@tree.command(name="adddatasource", description="Add a data source")
-async def add_datasource_command(interaction, description: str):
-    ds = await extract_datasource(description)
-    if ds is None:
-        await interaction.followup.send("No data source found")
-        return
-    await interaction.followup.send(f"Added data source {ds.get('name') or ds.get('url')}")
-    set_datasource(interaction.user.id, ds)
-
 
 
 @tree.command(name="summary", description="Get a summary of your conversations")
@@ -129,71 +92,9 @@ def channel_responder(channel, chunk_size=60):
                 await send.edit(content=content)
     return pipe, done
 
-@tree.command(name="knowledge", description="Get a summary of your knowledge")
-async def knowledge_command(interaction):
-    await interaction.response.defer()
-    await interaction.response.send("Fix this shit.")
-    #pipe, done = channel_responder(interaction.followup)
-    #await async_summarize_knowledge(conversation_manager.get_conversation_summary(interaction.user.id), pipe, done)
-
-@tree.command(name="remember", description="Sets a preference for the AI to always remember")
-async def always_command(interaction, preference: str, value: str):
-    set_preference(interaction.user.id, preference, value)
-    await interaction.response.send_message(f"Preference {preference} set to {value}")
-
-@tree.command(name="forget", description="Forgets a preference")
-async def forget_command(interaction):
-    view = discord.ui.View()
-    view.add_item(discord.ui.Select(placeholder="Preference", options=[SelectOption(label=preference + ": " + value, value=preference) for preference, value in get_preferences(interaction.user.id).items()]))
-    await interaction.response.defer()
-    message = await interaction.followup.send("Please choose a preference to forget:", view=view)
-    async def respond_to_select(user, message):
-        interaction = await client.wait_for("interaction", check=lambda i: i.user == user and i.data is not None and i.message == message and len(i.data.get("values", [])) > 0)
-        if interaction.data is None or interaction.message is None or len(interaction.data.get("values", [])) == 0:
-            return
-        preference = interaction.data.get("values", [])[0]
-        remove_preference(interaction.user, preference)
-        await interaction.response.edit_message(content=f"Preference {preference} forgotten", view=None)
-    asyncio.create_task(respond_to_select(interaction.user, message))
-
-@tree.command(name="timezone", description="Sets your timezone for the datetime command")
-async def timezone_command(interaction):
-    view = discord.ui.View()
-    view.add_item(discord.ui.Select(placeholder="Select timezone", options=[SelectOption(label=value, value=key) for key, value in timezones.items()]))
-    await interaction.response.defer()
-    message = await interaction.followup.send("Please choose your timezone:", view=view)
-    async def respond_to_select(user, message, id):
-        interaction = await client.wait_for("interaction", check=lambda i: i.user == user and i.data is not None and i.message == message and len(i.data.get("values", [])) > 0)
-        if interaction.data is None or interaction.message is None or len(interaction.data.get("values", [])) == 0:
-            return
-        timezone = interaction.data.get("values", [])[0]
-        await interaction.message.edit(content="Your timezone has been set to: " + timezones[timezone], view=None)
-        set_preference(user.id, "timezone", str(timezone))
-    asyncio.create_task(respond_to_select(interaction.user, message, id))
-
-@tree.command(name = "now", description = "Displays current date and time") #Add the guild ids in which the slash command will appear. If it should be in all, remove the argument, but note that it will take some time (up to an hour) to register the command if it's for all guilds.
-async def now_command(interaction):
-    now = datetime.datetime.now()
-    nowstr = now.strftime('%m-%d-%Y-%H:%M:%S')
-    await interaction.response.send_message(nowstr)
-
-@tree.command(name = "new", description = "Clears the current conversation's context") #Add the guild ids in which the slash command will appear. If it should be in all, remove the argument, but note that it will take some time (up to an hour) to register the command if it's for all guilds.
-async def new_command(interaction):    
-    convo = Conversation.new_conversation()
-    db.set_conversation(interaction.user, convo)
-    db.set_current_conversation(interaction.user, convo)
-    await interaction.response.send_message("New conversation created.")
-
-@tree.command(name='sync', description='Owner only')
-async def sync(interaction: discord.Interaction):
-    await interaction.response.defer()
-    await tree.sync(guild=interaction.guild)
-    await tree.sync()
-    await interaction.followup.send('Synced.')
-
 @client.event
 async def on_ready():
-    print('Logged in as {0.user}'.format(client))
+    logging.info('Logged in as {0.user}'.format(client))
     await tree.sync()
 
 @client.event
