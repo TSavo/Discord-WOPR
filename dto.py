@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import AsyncGenerator, List, Optional, Union
 from uuid import uuid4
 import discord
+import dataclasses
 
 @dataclass
 class Message:
@@ -67,6 +68,7 @@ class Guild:
         )
     def get_discord_guild(self, discord_client:discord.Client) -> Optional[discord.Guild]:
         return discord_client.get_guild(int(self.id))
+    
 @dataclass
 class User:
     id:str
@@ -197,7 +199,6 @@ class Tool:
     type: str
     function: Function
 
-import dataclasses
 @dataclass
 class MessageClassification:
   original_message:str #The original message from the user
@@ -222,6 +223,7 @@ class Justification:
 class FunctionParameterValue:
     type:str
     value:Any
+    
 @dataclass
 class FunctionParameter:
     type: str
@@ -260,7 +262,6 @@ class ToolDefinition:
     
     def getExampleInvocation(self) -> str:
         return self.python + "\n" + self.example_invocation + "\n"
-    
 
 @dataclass
 class Knowledge:

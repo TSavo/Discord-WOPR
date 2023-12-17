@@ -38,7 +38,7 @@ class PleasantryIntent(Intent):
 
 class InquiryIntent(Intent):
     def __init__(self):
-        super().__init__(["A question or comment, specifically about what just happened.", "A question or comment regarding what was just discussed.", "Something that was relevant to the conversation we have been having."], NoOpIntent().get_actions())
+        super().__init__(["A question or comment, specifically about what just happened.", "A question or comment regarding what was just discussed.", "Something that was relevant to the conversation we have been having.", "A question regarding what has already been discussed in the current conversation that does not require a tool or function call."], NoOpIntent().get_actions())
 
 class RememberIntent(Intent):
     def __init__(self):
@@ -51,3 +51,7 @@ class ForgetIntent(Intent):
 class CreateToolIntent(Intent):
     def __init__(self):
         super().__init__(["An explicit request to create a tool."], [CreateToolAction()])
+
+class UseToolIntent(Intent):
+    def __init__(self):
+        super().__init__(["An explicit request to use or invoke an existing tool or function.", "A request that can be best satisfied by invoking a tool or function.", "Specific instructions that can be satisfied by invoking a tool or function."], NoOpIntent().get_actions())

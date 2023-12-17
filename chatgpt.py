@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from typing import Any, List, Optional, Tuple, Type
 from openai import OpenAI, AsyncOpenAI
 import os
@@ -25,12 +26,12 @@ analyzer = SentimentIntensityAnalyzer()
 exact_engine = "gpt-4"
 fast_engine="gpt-3.5-turbo"
 
-@retry(tries=3, delay=3, backoff=2, logger=None)
+@retry(tries=3, delay=3, backoff=2, logger=logging.getLogger(__name__))
 async def get_completion(messages :list[dict[str,str]], model:str=exact_engine, temperature:float=0.5, exact=False, tools:List[ToolDefinition]=[]) -> str:
     if exact:
         model=exact_engine
     request = {"model":model, "messages":messages, "temperature":temperature}
-    if len(tools) > 0:
+    if tools is not None and len(tools) > 0:
         request["tools"] = tools
     response = client.chat.completions.create(**request)
     if response is None:
@@ -180,13 +181,6 @@ async def extract_urls(query : str) -> List[dict[str,str]]:
     except:
         return []
     
-async def extract_datasource(query : str) -> Optional[dict[str,str]]:
-    convo = [
-        {"role":"system","content":"You are a software engineer responsible for designing a web API interface based on a plain text description. Your goal is to take a description of a web API, including its URL and endpoints, and create a YAML map that includes all the relevant parameters specified. For example, if you were given the following plain text description: \"I have an API for searching Google at google.com, and it has a search API at /search which takes a query parameter q and returns results in JSON format\", your output would be a YAML map that includes the following information:\n```yaml\nurl: \"https://google.com\"\nendpoints:\n  - path: \"/search\"\n    method: \"GET\"\n    query_params:\n      - name: \"q\"\n        required: true\n    response_format: \"json\"\n```\n"},
-        {"role":"user","content":f"Your first example is, \"{query}\" Please write a YAML map for this datasource."}
-    ]
-    result = (await get_completion(convo)).replace('"', '').replace("'", "").rstrip().lstrip()
-
 async def async_summarize_knowledge(conversation_summary: str, pipe, done) -> str:
     convo = [
         {"role":"system","content":"You are a helpful AI assistant who knows how to summarize a series of conversations into a knowledge base. I will supply you with a list of summaries of prior conversations we have had, and I want you to write a paragraph or three containing the key datapoints from all the conversations. Make sure to include key datapoints from all the conversations."},
@@ -302,8 +296,8 @@ async def get_structured_classification(message: str, cls: Type[T], constraints:
         convo += [{"role": "system", "content": con}]
     if additional_context is not None:
         convo += [{"role": "system", "content": "Here's some additional context for the request. Be sure and include relevant information from here when additional information can be synthasized, for example relevant API keys or other secrets: " + additional_context}]
-    convo += [{"role": "system", "content": "VERY IMPORTANT: Make sure to add a line break after a > in the YAML. Also be sure you escape any inner quotes in strings. Don't forget!!!"}]
-    convo += [{"role": "user", "content": f'VERY IMPORTANT: Make sure to add a line break after a > in the YAML. Also be sure you escape any inner quotes in strings. Don\'t forget!!! Please convert the following into a blockquoted YAML dictionary or array of dictionaries that follows the above constraints: "{message}"\n'}]
+    convo += [{"role": "system", "content": "Be sure you escape any inner quotes in strings. Don't forget!!!"}]
+    convo += [{"role": "user", "content": f'Be sure you escape any inner quotes in strings. Don\'t forget!!! Please convert the following into a blockquoted YAML dictionary or array of dictionaries that follows the above constraints: "{message}"\n'}]
     result, tool_calls = await get_completion(convo, tools=tools)
     if result is None:
         return [], tool_calls
